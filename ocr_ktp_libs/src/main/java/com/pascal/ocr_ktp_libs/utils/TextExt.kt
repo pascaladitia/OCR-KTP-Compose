@@ -73,20 +73,26 @@ fun Text.extractEktp(): KTPModel {
                     ektp.nama?.let { ektp.confidence++ }
                 }
 
-                line.text.startsWith("Tempat", true) || line.text.contains("Lahir") -> {
+                line.text.startsWith("Tempat", ignoreCase = true) || line.text.contains("Lahir", ignoreCase = true) -> {
                     val tempatTanggal = findAndClean(line, "Tempat/Tg Lahir")
                     tempatTanggal?.let {
-                        // Regex untuk memisahkan tempat dan tanggal
-                        val regex = """([A-Za-z\s]+),\s*(\d{2} \d{2}-\d{4})""".toRegex()
+                        // Regex yang lebih fleksibel untuk memisahkan tempat dan tanggal
+                        val regex = """([A-Za-z\s]+),?\s*(\d{2}[\s-]\d{2}[\s-]\d{4})""".toRegex()
                         val matchResult = regex.find(it)
 
-                        if (matchResult != null) {
-                            ektp.tempatLahir = matchResult.groupValues[1].trim()
-                            ektp.tempatLahir?.let { ektp.confidence++ }
+                        if (matchResult != null && matchResult.groupValues.size >= 3) {
+                            // Ambil nilai tempat lahir dan tanggal lahir jika tidak null
+                            ektp.tempatLahir = matchResult.groupValues[1].trim().takeIf { it.isNotEmpty() }
+                            ektp.tglLahir = matchResult.groupValues[2].trim().takeIf { it.isNotEmpty() }
 
-                            ektp.tglLahir = matchResult.groupValues[2].trim()
+                            // Update confidence jika data valid
+                            ektp.tempatLahir?.let { ektp.confidence++ }
                             ektp.tglLahir?.let { ektp.confidence++ }
+                        } else {
+                            println("Gagal memisahkan tempat dan tanggal lahir")
                         }
+                    } ?: run {
+                        println("Data tempat/tanggal lahir tidak ditemukan")
                     }
                 }
 
@@ -466,6 +472,7 @@ fun String.filterNumberToAlphabet(): String {
 fun String.filterAlphabetToNumber(): String {
     return replace("O", "0")
         .replace("I", "1")
+        .replace("l", "1")
         .replace("L", "6")
         .replace("A", "4")
         .replace("S", "5")
