@@ -1,5 +1,3 @@
-
-
 import android.util.Log
 import com.google.mlkit.vision.text.Text
 import org.json.JSONObject
@@ -65,10 +63,8 @@ fun Text.extractEktp(): KTPModel {
 
                 line.text.startsWith("NIK") -> {
                     ektp.confidence++
-                    ektp.nik = ((if (line.elements.size > 1)
-                        line.elements.last().text
-                    else
-                        filterNik())?.cleanse("NIK"))?.filterAlphabetToNumber()
+                    ektp.nik = findAndClean(line, "NIK")?.filterAlphabetToNumber()
+                    ektp.nik?.let { ektp.confidence++ }
                 }
 
                 line.text.startsWith("Nama", true) -> {
@@ -78,15 +74,20 @@ fun Text.extractEktp(): KTPModel {
                 }
 
                 line.text.startsWith("Tempat", true) || line.text.contains("Lahir") -> {
-                    ektp.confidence++
-                    //tempat lahir allcaps
-                    val ttl = REGEX_CAPS.toRegex().findAll(line.text)
+                    val tempatTanggal = findAndClean(line, "Tempat/Tg Lahir")
+                    tempatTanggal?.let {
+                        // Regex untuk memisahkan tempat dan tanggal
+                        val regex = """([A-Za-z\s]+),\s*(\d{2} \d{2}-\d{4})""".toRegex()
+                        val matchResult = regex.find(it)
 
-                    ektp.tempatLahir = ttl.firstOrNull()?.value?.trim()
-                    ektp.tempatLahir?.let { ektp.confidence++ }
+                        if (matchResult != null) {
+                            ektp.tempatLahir = matchResult.groupValues[1].trim()
+                            ektp.tempatLahir?.let { ektp.confidence++ }
 
-                    ektp.tglLahir = ttl.elementAtOrNull(1)?.value?.trim()
-                    ektp.tglLahir?.let { ektp.confidence++ }
+                            ektp.tglLahir = matchResult.groupValues[2].trim()
+                            ektp.tglLahir?.let { ektp.confidence++ }
+                        }
+                    }
                 }
 
                 line.text.startsWith("Jenis", true) -> {
@@ -289,6 +290,7 @@ fun Text.extractKtp() {
                         ktpModel.tempatLahir = result.groupValues.firstOrNull()
                         ktpModel.tglLahir = result.groupValues.elementAtOrNull(1)
                     }
+
                     5 -> ktpModel.jenisKelamin = result.value
                     6 -> ktpModel.alamat = result.value
                     7 -> {
@@ -298,6 +300,7 @@ fun Text.extractKtp() {
                         }
 
                     }
+
                     8 -> ktpModel.kelurahan = result.value
                     9 -> ktpModel.kecamatan = result.value
                     10 -> ktpModel.agama = result.value
@@ -463,7 +466,7 @@ fun String.filterNumberToAlphabet(): String {
 fun String.filterAlphabetToNumber(): String {
     return replace("O", "0")
         .replace("I", "1")
-        .replace("L", "1")
+        .replace("L", "6")
         .replace("A", "4")
         .replace("S", "5")
         .replace("T", "7")
